@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useRef} from 'react';
 import CookieManager, {Cookie} from '@react-native-cookies/cookies';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -12,10 +12,8 @@ import {
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 import WebView from 'react-native-webview';
 
-const SITE_URL = 'https://ru.bina.az';
+const SITE_URL = 'https://bina.az';
 const COOKIE_URL = 'https://ru.bina.az';
-// const SITE_URL = 'https://google.com';
-
 const COOKIE_KEY = 'binaCookies';
 
 function App(): Element {
@@ -25,9 +23,12 @@ function App(): Element {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
+  const counter = useRef<number>();
+  counter.current = 1;
+
   useEffect(() => {
     const setCookies = async () => {
-      await CookieManager.clearAll();
+      await CookieManager.clearAll(true);
       const savedCookies = await AsyncStorage.getItem(COOKIE_KEY);
 
       if (!savedCookies) {
@@ -37,18 +38,23 @@ function App(): Element {
       const parsedCookies: Cookie[] = JSON.parse(savedCookies);
 
       for (let cookieItem of parsedCookies) {
-        const result = await CookieManager.set(SITE_URL, {
-          name: cookieItem.name,
-          value: cookieItem.value,
-          path: cookieItem.path || '/',
-          expires: cookieItem.expires,
-          version: '1',
-          httpOnly: true,
-          secure: true,
-        });
+        const result = await CookieManager.set(
+          COOKIE_URL,
+          {
+            name: cookieItem.name,
+            domain: '.bina.az',
+            value: cookieItem.value,
+            path: cookieItem.path || '/',
+            expires: cookieItem.expires,
+            version: '1',
+            httpOnly: true,
+            secure: true,
+          },
+          true,
+        );
 
         console.log('Set cookie:', cookieItem.name, cookieItem.value, result);
-        await CookieManager.set(SITE_URL, cookieItem, true);
+        await CookieManager.set(COOKIE_URL, cookieItem, true);
       }
     };
 
@@ -58,16 +64,36 @@ function App(): Element {
 
         const sessionCookie = cookies._binaaz_session;
         if (sessionCookie) {
-          console.log('_binaaz_session', sessionCookie.value);
+          console.log('_binaaz_session', sessionCookie.value.slice(0, 10));
+        } else {
+          console.log('cookies', cookies)
         }
 
         if (Object.keys(cookies).length === 0) {
+          console.log('no cookies');
           return;
         }
 
+        counter.current = (counter.current as any) + 1;
+        const counterCookie = await CookieManager.set(
+          COOKIE_URL,
+          {
+            name: 'counter',
+            domain: '.bina.az',
+            value: (counter.current as number).toString(),
+            path: '/',
+            expires: new Date(+new Date() + 60 * 60 * 1000).toISOString(),
+            version: '1',
+            httpOnly: true,
+            secure: true,
+          },
+          true,
+        );
+        console.log(counterCookie, counter.current);
+
         const arrayOfCookies = Object.values(cookies);
         await AsyncStorage.setItem(COOKIE_KEY, JSON.stringify(arrayOfCookies));
-      }, 2000);
+      }, 10000);
     };
 
     setCookies();
@@ -94,6 +120,7 @@ function App(): Element {
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
           <WebView
+            key="webView"
             style={webviewStyles}
             sharedCookiesEnabled
             webviewDebuggingEnabled
