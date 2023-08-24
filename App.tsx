@@ -1,8 +1,7 @@
 import React, {useEffect} from 'react';
-import CookieManager from '@react-native-cookies/cookies';
+import CookieManager, {Cookie} from '@react-native-cookies/cookies';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Platform,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -13,7 +12,8 @@ import {
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 import WebView from 'react-native-webview';
 
-const SITE_URL = 'https://bina.az';
+const SITE_URL = 'https://ru.bina.az';
+const COOKIE_URL = 'https://ru.bina.az';
 // const SITE_URL = 'https://google.com';
 
 const COOKIE_KEY = 'binaCookies';
@@ -27,32 +27,45 @@ function App(): Element {
 
   useEffect(() => {
     const setCookies = async () => {
+      await CookieManager.clearAll();
       const savedCookies = await AsyncStorage.getItem(COOKIE_KEY);
 
       if (!savedCookies) {
         return;
       }
 
-      const parsedCookies = JSON.parse(savedCookies);
+      const parsedCookies: Cookie[] = JSON.parse(savedCookies);
 
       for (let cookieItem of parsedCookies) {
-        await CookieManager.set(SITE_URL, cookieItem);
+        const result = await CookieManager.set(SITE_URL, {
+          name: cookieItem.name,
+          value: cookieItem.value,
+          path: cookieItem.path || '/',
+          expires: cookieItem.expires,
+          version: '1',
+          httpOnly: true,
+          secure: true,
+        });
+
+        console.log('Set cookie:', cookieItem.name, cookieItem.value, result);
+        await CookieManager.set(SITE_URL, cookieItem, true);
       }
     };
 
     const startWatchCookiesInterval = () => {
       return setInterval(async () => {
-        const cookies =
-          Platform.OS === 'ios'
-            ? await CookieManager.get(SITE_URL, true)
-            : await CookieManager.get(SITE_URL);
-        console.log(cookies);
+        const cookies = await CookieManager.get(COOKIE_URL, true);
+
+        const sessionCookie = cookies._binaaz_session;
+        if (sessionCookie) {
+          console.log('_binaaz_session', sessionCookie.value);
+        }
 
         if (Object.keys(cookies).length === 0) {
           return;
         }
 
-        const arrayOfCookies = Object.values(cookies).map(val => val);
+        const arrayOfCookies = Object.values(cookies);
         await AsyncStorage.setItem(COOKIE_KEY, JSON.stringify(arrayOfCookies));
       }, 2000);
     };
@@ -82,6 +95,8 @@ function App(): Element {
           }}>
           <WebView
             style={webviewStyles}
+            sharedCookiesEnabled
+            webviewDebuggingEnabled
             source={{
               uri: SITE_URL,
             }}
